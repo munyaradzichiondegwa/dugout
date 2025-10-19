@@ -18,7 +18,7 @@ export default function SupportPage() {
     // Simulate POST to /api/support
     toast.loading('Sending message...');
     setTimeout(() => {
-      toast.success('Support request sent! We'll respond soon.');
+      toast.success('Support request sent! We will respond soon.');
       setLoading(false);
       setMessage('');
     }, 1500);
