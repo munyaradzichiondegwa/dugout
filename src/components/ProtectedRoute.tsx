@@ -1,9 +1,26 @@
-// src/components/ProtectedRoute.tsx
-import { redirect } from 'next/navigation';
+'use client';
 
-export default function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: string }) {
-  // Server-side: Check session
-  const session = /* getSession() */;
-  if (!session || (role && session.user.role !== role)) redirect('/login');
+import { ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+
+interface ProtectedRouteProps {
+  children: ReactNode;
+  role?: string;
+}
+
+// Temporary session type
+type Session = { user: { role: string } } | null;
+
+export default function ProtectedRoute({ children, role }: ProtectedRouteProps) {
+  const router = useRouter();
+
+  // TODO: Replace with real session logic
+  const session: Session = null; // e.g., replace with getSession() later
+
+  if (!session || (role && session.user.role !== role)) {
+    router.push('/login');
+    return null;
+  }
+
   return <>{children}</>;
 }
