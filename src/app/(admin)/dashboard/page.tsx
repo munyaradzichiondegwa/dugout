@@ -1,19 +1,24 @@
-// Server component wrapper
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
-import { fetchVendors, fetchRecentOrders } from '@/lib/db';
-import AdminDashboardClient from './AdminDashboardClient';
+import type { Session } from 'next-auth';
 
-export default async function AdminDashboardWrapper() {
-  const session = await getServerSession();
+interface AppUser {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: 'admin' | 'customer' | 'vendor'; // add your roles
+}
+
+interface AppSession extends Session {
+  user: AppUser;
+}
+
+export default async function AdminDashboardPage() {
+  const session = (await getServerSession()) as AppSession;
 
   if (!session?.user?.role || session.user.role !== 'admin') {
     redirect('/unauthorized');
   }
 
-  // Fetch server-side
-  const vendors = await fetchVendors({ verified: false });
-  const recentOrders = await fetchRecentOrders(10);
-
-  return <AdminDashboardClient vendors={vendors} recentOrders={recentOrders} />;
+  return <div>Admin Dashboard</div>;
 }
