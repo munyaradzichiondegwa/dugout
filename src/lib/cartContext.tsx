@@ -1,35 +1,28 @@
-// src/lib/cartContext.tsx
 'use client';
-
 import { createContext, useContext, useReducer, ReactNode } from 'react';
 
-interface CartItem {
+export interface CartItem {
   menuItemId: string;
   name: string;
-  price: number;
+  price: number; // in cents
   quantity: number;
   vendorId: string;
 }
 
-interface CartState {
+export interface CartState {
   vendorId: string | null;
   items: CartItem[];
-  totalAmount: number;
+  totalAmount: number; // in cents
 }
 
 type CartAction =
   | { type: 'SET_VENDOR'; payload: string }
-  | { type: 'ADD_ITEM'; payload: Omit<CartItem, 'vendorId'> }
+  | { type: 'ADD_ITEM'; payload: CartItem }
   | { type: 'UPDATE_QUANTITY'; payload: { menuItemId: string; quantity: number } }
   | { type: 'REMOVE_ITEM'; payload: string }
   | { type: 'CLEAR_CART' };
 
-interface CartContextType {
-  state: CartState;
-  dispatch: React.Dispatch<CartAction>;
-}
-
-const CartContext = createContext<CartContextType | undefined>(undefined);
+const CartContext = createContext<{ state: CartState; dispatch: React.Dispatch<CartAction> } | undefined>(undefined);
 
 const initialState: CartState = {
   vendorId: null,
@@ -37,50 +30,62 @@ const initialState: CartState = {
   totalAmount: 0,
 };
 
+// Utility to calculate total
+const calculateTotal = (items: CartItem[]) => items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case 'SET_VENDOR':
       return { vendorId: action.payload, items: [], totalAmount: 0 };
 
     case 'ADD_ITEM': {
-      if (!state.vendorId) return state; // Cannot add without vendor
-
-      const existingItem = state.items.find(i => i.menuItemId === action.payload.menuItemId);
+      const existingItem = state.items.find(item => item.menuItemId === action.payload.menuItemId);
       let updatedItems: CartItem[];
 
       if (existingItem) {
-        updatedItems = state.items.map(i =>
-          i.menuItemId === action.payload.menuItemId ? { ...i, quantity: i.quantity + 1 } : i
+        updatedItems = state.items.map(item =>
+          item.menuItemId === action.payload.menuItemId
+            ? { ...item, quantity: item.quantity + action.payload.quantity }
+            : item
         );
       } else {
-        updatedItems = [...state.items, { ...action.payload, quantity: 1, vendorId: state.vendorId }];
+        updatedItems = [...state.items, action.payload];
       }
 
-      const totalAmount = updatedItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-      return { ...state, items: updatedItems, totalAmount };
+      return {
+        ...state,
+        items: updatedItems,
+        totalAmount: calculateTotal(updatedItems),
+      };
     }
 
     case 'UPDATE_QUANTITY': {
       const updatedItems = state.items
-        .map(i =>
-          i.menuItemId === action.payload.menuItemId
-            ? { ...i, quantity: action.payload.quantity }
-            : i
+        .map(item =>
+          item.menuItemId === action.payload.menuItemId
+            ? { ...item, quantity: action.payload.quantity }
+            : item
         )
-        .filter(i => i.quantity > 0); // remove items with 0 quantity
+        .filter(item => item.quantity > 0); // Remove if quantity becomes 0
 
-      const totalAmount = updatedItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-      return { ...state, items: updatedItems, totalAmount };
+      return {
+        ...state,
+        items: updatedItems,
+        totalAmount: calculateTotal(updatedItems),
+      };
     }
 
     case 'REMOVE_ITEM': {
-      const updatedItems = state.items.filter(i => i.menuItemId !== action.payload);
-      const totalAmount = updatedItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-      return { ...state, items: updatedItems, totalAmount };
+      const updatedItems = state.items.filter(item => item.menuItemId !== action.payload);
+      return {
+        ...state,
+        items: updatedItems,
+        totalAmount: calculateTotal(updatedItems),
+      };
     }
 
     case 'CLEAR_CART':
-      return { ...state, items: [], totalAmount: 0 };
+      return { ...state, items: [], totalAmount: 0, vendorId: null };
 
     default:
       return state;
