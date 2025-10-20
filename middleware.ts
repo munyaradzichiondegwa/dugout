@@ -6,7 +6,7 @@ export async function middleware(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.JWT_SECRET });
   const { pathname } = req.nextUrl;
 
-  if (pathname.startsWith('/api/admin') && !token?.role === 'admin') {
+  if (pathname.startsWith('/api/admin') && token?.role !== 'admin') {
     return NextResponse.redirect(new URL('/unauthorized', req.url));
   }
 

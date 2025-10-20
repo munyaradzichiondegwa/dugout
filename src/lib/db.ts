@@ -4,6 +4,7 @@ import Vendor from '@/models/Vendor';
 import Wallet from '@/models/Wallet';
 import Order from '@/models/Order';
 
+// Ensure MongoDB URI is available
 const MONGODB_URI = process.env.MONGODB_URI!;
 if (!MONGODB_URI) throw new Error('Please define MONGODB_URI in .env.local');
 
@@ -13,6 +14,8 @@ declare global {
 }
 
 let cached = global.mongoose || { conn: null, promise: null };
+
+/* =================== DATABASE CONNECTION =================== */
 
 /**
  * Connect to MongoDB (cached in development)
@@ -37,24 +40,57 @@ export async function dbConnect(): Promise<mongoose.Mongoose> {
 
 /* =================== VENDOR HELPERS =================== */
 
+interface VendorFilters {
+  verified?: boolean;
+  lat?: number;
+  lng?: number;
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
 /**
- * Fetch all verified vendors, optionally near a location
+ * Fetch vendors with optional filters (verification, location, pagination, search)
  */
-export async function fetchVendors(near?: { lat: number; lng: number }) {
+export async function fetchVendors(filters: VendorFilters = {}) {
   await dbConnect();
 
-  const query: any = { verificationStatus: 'verified' };
+  const query: any = {};
 
-  if (near) {
+  // Verification filter
+  if (typeof filters.verified === 'boolean') {
+    query.verificationStatus = filters.verified ? 'verified' : 'pending';
+  } else {
+    query.verificationStatus = 'verified'; // default behavior
+  }
+
+  // Text search (e.g., vendor name or type)
+  if (filters.search) {
+    query.$or = [
+      { name: { $regex: filters.search, $options: 'i' } },
+      { vendorType: { $regex: filters.search, $options: 'i' } },
+    ];
+  }
+
+  // Optional geospatial filter
+  if (filters.lat && filters.lng) {
     query.location = {
       $near: {
-        $geometry: { type: 'Point', coordinates: [near.lng, near.lat] },
-        $maxDistance: 10000, // 10km
+        $geometry: { type: 'Point', coordinates: [filters.lng, filters.lat] },
+        $maxDistance: 10000, // 10 km
       },
     };
   }
 
-  return Vendor.find(query).populate('items');
+  const page = filters.page || 1;
+  const limit = filters.limit || 20;
+  const skip = (page - 1) * limit;
+
+  return Vendor.find(query)
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .populate('items');
 }
 
 /**
@@ -106,4 +142,18 @@ export async function fetchOrders(userId: string, status?: string) {
 export async function fetchOrderById(orderId: string) {
   await dbConnect();
   return Order.findById(orderId).populate('items vendor');
+}
+
+/* =================== ADMIN HELPERS =================== */
+
+/**
+ * Fetch recent orders for admin dashboard (last 24 hours)
+ */
+export async function fetchRecentOrders(limit: number = 10) {
+  await dbConnect();
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  return Order.find({ createdAt: { $gte: oneDayAgo } })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .populate('userId vendorId');
 }

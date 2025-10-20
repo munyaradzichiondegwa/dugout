@@ -1,7 +1,6 @@
-// src/app/(customer)/wallet/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
-import { fetchWallet } from '@/lib/db';
+import { fetchWalletByUserId } from '@/lib/db'; // Fixed: Use exported function
 import { toast } from 'react-hot-toast';
 import Link from 'next/link';
 
@@ -11,11 +10,18 @@ export default function WalletPage() {
   const [method, setMethod] = useState('EcoCash');
   const [loading, setLoading] = useState(true);
 
+  // Mock user ID (replace with real session/context in production)
+  const userId = 'mock-user-id'; // e.g., from useSession() or context
+
   useEffect(() => {
-    fetchWallet('user-id') // Real user from session
+    fetchWalletByUserId(userId)
       .then(setWallet)
+      .catch((err) => {
+        console.error(err);
+        toast.error('Failed to fetch wallet');
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [userId]);
 
   const handleTopUp = async (e: React.FormEvent) => {
     e.preventDefault();

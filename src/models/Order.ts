@@ -1,14 +1,13 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IOrder extends Document {
-  userId: mongoose.Types.ObjectId;
-  vendorId: mongoose.Types.ObjectId;
-  items: any[]; // Snapshot of cart items
-  totalAmount: number; // Cents
-  currency: 'ZWL' | 'USD';
-  status: 'pending' | 'accepted' | 'picking' | 'packed' | 'fulfilled' | 'cancelled';
-  orderType: 'instant' | 'scheduled' | 'reservation'; // Updated enum
-  transactionRef?: string;
+  userId: string;
+  vendorId: string;
+  items: { menuItemId: string; quantity: number }[];
+  totalAmount: number;
+  currency: string;
+  status: 'pending' | 'completed' | 'cancelled';
+  orderType: 'instant' | 'scheduled' | 'reservation';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,22 +16,20 @@ const OrderSchema: Schema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     vendorId: { type: Schema.Types.ObjectId, ref: 'Vendor', required: true },
-    items: [{ type: Schema.Types.Mixed, required: true }], // Cart snapshot
+    items: [
+      {
+        menuItemId: { type: Schema.Types.ObjectId, required: true },
+        quantity: { type: Number, required: true },
+      },
+    ],
     totalAmount: { type: Number, required: true },
-    currency: { type: String, enum: ['ZWL', 'USD'], required: true },
-    status: {
-      type: String,
-      enum: ['pending', 'accepted', 'picking', 'packed', 'fulfilled', 'cancelled'],
-      default: 'pending',
-    },
-    orderType: {
-      type: String,
-      enum: ['instant', 'scheduled', 'reservation'], // Updated
-      default: 'instant',
-    },
-    transactionRef: { type: String },
+    currency: { type: String, default: 'USD' },
+    status: { type: String, enum: ['pending', 'completed', 'cancelled'], default: 'pending' },
+    orderType: { type: String, enum: ['instant', 'scheduled', 'reservation'], default: 'instant' },
   },
   { timestamps: true }
 );
 
-export default mongoose.models.Order || mongoose.model<IOrder>('Order', OrderSchema);
+// ✅ Safe export
+const OrderModel = mongoose.models.Order || mongoose.model<IOrder>('Order', OrderSchema);
+export default OrderModel;

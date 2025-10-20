@@ -1,17 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
-import dbConnect from '@/lib/db';
+import { dbConnect } from '@/lib/db';
 import Vendor from '@/models/Vendor';
 import { getAuthUser } from '@/lib/auth';
-import { useParams } from 'next/navigation'; // Note: For API, use req.url
 
-export async function POST(req: NextRequest) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   await dbConnect();
+
   const user = getAuthUser();
-  if (!user || user.role !== 'admin') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user || user.role !== 'admin') {
+    return NextResponse.json({ error: 'Unauthorized: Admin only' }, { status: 401 });
+  }
 
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get('id'); // Or parse from path if using dynamic
+  const { id } = params;
+  const body = await req.json().catch(() => ({}));
+  const action = body.action || 'verify'; // default to 'verify' if not provided
 
-  await Vendor.findByIdAndUpdate(id, { verified: true });
-  return NextResponse.json({ message: 'Vendor verified' });
+  const vendor = await Vendor.findById(id);
+  if (!vendor) {
+    return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+  }
+
+  // 🧩 Handle admin action
+  switch (action) {
+    case 'verify':
+      vendor.verified = true;
+      vendor.verificationStatus = 'verified';
+      break;
+
+    case 'reject':
+      vendor.verified = false;
+      vendor.verificationStatus = 'rejected';
+      break;
+
+    case 'suspend':
+      vendor.verified = false;
+      vendor.verificationStatus = 'suspended';
+      break;
+
+    default:
+      return NextResponse.json({ error: `Invalid action: ${action}` }, { status: 400 });
+  }
+
+  await vendor.save();
+
+  return NextResponse.json({
+    message: `Vendor ${action}ed successfully`,
+    vendor,
+  });
 }

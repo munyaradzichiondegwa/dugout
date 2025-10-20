@@ -1,32 +1,29 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IVendor extends Document {
-  userId: mongoose.Types.ObjectId;
   name: string;
-  vendorType: 'food' | 'beverage' | 'grocery';
+  vendorType: string;
+  payoutMethod: string;
   location: {
     type: 'Point';
-    coordinates: [number, number]; // [lng, lat] GeoJSON
+    coordinates: [number, number]; // [lng, lat]
   };
-  verified: boolean;
-  payoutMethod: string; // e.g., 'EcoCash'
-  createdAt: Date;
-  updatedAt: Date;
 }
 
-const VendorSchema: Schema = new Schema({
-  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+const VendorSchema = new Schema<IVendor>({
   name: { type: String, required: true },
-  vendorType: { type: String, enum: ['food', 'beverage', 'grocery'], required: true },
-  location: {
-    type: { type: String, default: 'Point' },
-    coordinates: { type: [Number], required: true }, // [lng, lat]
-  },
-  verified: { type: Boolean, default: false },
+  vendorType: { type: String, required: true },
   payoutMethod: { type: String, required: true },
+  location: {
+    type: { type: String, enum: ['Point'], required: true, default: 'Point' },
+    coordinates: { type: [Number], required: true },
+  },
 }, { timestamps: true });
 
-// Geospatial index
+// Create 2dsphere index for geo queries
 VendorSchema.index({ location: '2dsphere' });
 
-export default mongoose.models.Vendor || mongoose.model<IVendor>('Vendor', VendorSchema);
+// Prevent model overwrite on hot reload
+const VendorModel: Model<IVendor> = mongoose.models.Vendor || mongoose.model<IVendor>('Vendor', VendorSchema);
+
+export default VendorModel;

@@ -3,26 +3,47 @@ import { dbConnect } from '@/lib/db';
 import Vendor from '@/models/Vendor';
 import { getAuthUser } from '@/lib/auth';
 
-export async function GET(req: NextRequest) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   await dbConnect();
-  const user = getAuthUser();
+  const user = await getAuthUser();
+
   if (!user || user.role !== 'admin') {
     return NextResponse.json({ error: 'Unauthorized: Admin only' }, { status: 401 });
   }
 
-  const { searchParams } = new URL(req.url);
-  const verified = searchParams.get('verified') === 'false'; // Unverified by default
+  const { id } = params;
 
-  const vendors = await Vendor.find({ verified: verified ? false : { $ne: false } }).populate('userId');
-  return NextResponse.json(vendors);
-}
+  // Verify vendor exists
+  const vendor = await Vendor.findById(id);
+  if (!vendor) {
+    return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+  }
 
-export async function POST(req: NextRequest) { // Verify specific vendor (use [id]/verify for single)
-  await dbConnect();
-  const user = getAuthUser();
-  if (!user || user.role !== 'admin') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { action } = await req.json();
+  if (!action || !['verify', 'reject', 'suspend'].includes(action)) {
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+  }
 
-  const { vendorId } = await req.json();
-  await Vendor.findByIdAndUpdate(vendorId, { verified: true });
-  return NextResponse.json({ message: 'Verified' });
+  // Update vendor status based on action
+  switch (action) {
+    case 'verify':
+      vendor.verificationStatus = 'verified';
+      vendor.verified = true; // backward-compatible if schema still uses `verified`
+      break;
+    case 'reject':
+      vendor.verificationStatus = 'rejected';
+      vendor.verified = false;
+      break;
+    case 'suspend':
+      vendor.verificationStatus = 'suspended';
+      vendor.verified = false;
+      break;
+  }
+
+  await vendor.save();
+
+  return NextResponse.json({ message: `Vendor ${action}d successfully`, vendor });
 }
