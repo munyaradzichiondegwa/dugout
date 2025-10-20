@@ -1,49 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dbConnect } from '@/lib/db';
-import Vendor from '@/models/Vendor';
-import { getAuthUser } from '@/lib/auth';
+import dbConnect from '@/lib/dbConnect';
+import VendorModel, { IVendor } from '@/models/Vendor';
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(req: NextRequest) {
   await dbConnect();
-  const user = await getAuthUser();
 
-  if (!user || user.role !== 'admin') {
-    return NextResponse.json({ error: 'Unauthorized: Admin only' }, { status: 401 });
+  try {
+    const vendors = await VendorModel.find();
+    return NextResponse.json(vendors, { status: 200 });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: 'Failed to fetch vendors' }, { status: 500 });
   }
+}
 
-  const { id } = params;
+export async function PATCH(req: NextRequest) {
+  await dbConnect();
 
-  // Verify vendor exists
-  const vendor = await Vendor.findById(id);
-  if (!vendor) {
-    return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+  try {
+    const { vendorId, action } = await req.json();
+
+    const vendor = await VendorModel.findById(vendorId);
+    if (!vendor) {
+      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+    }
+
+    switch (action) {
+      case 'verify':
+        // Add verificationStatus property to type
+        (vendor as IVendor & { verificationStatus?: string }).verificationStatus = 'verified';
+        vendor.verified = true; // backward-compatible
+        break;
+      case 'reject':
+        (vendor as IVendor & { verificationStatus?: string }).verificationStatus = 'rejected';
+        vendor.verified = false;
+        break;
+      default:
+        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    }
+
+    await vendor.save();
+    return NextResponse.json(vendor, { status: 200 });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: 'Failed to update vendor' }, { status: 500 });
   }
-
-  const { action } = await req.json();
-  if (!action || !['verify', 'reject', 'suspend'].includes(action)) {
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-  }
-
-  // Update vendor status based on action
-  switch (action) {
-    case 'verify':
-      vendor.verificationStatus = 'verified';
-      vendor.verified = true; // backward-compatible if schema still uses `verified`
-      break;
-    case 'reject':
-      vendor.verificationStatus = 'rejected';
-      vendor.verified = false;
-      break;
-    case 'suspend':
-      vendor.verificationStatus = 'suspended';
-      vendor.verified = false;
-      break;
-  }
-
-  await vendor.save();
-
-  return NextResponse.json({ message: `Vendor ${action}d successfully`, vendor });
 }

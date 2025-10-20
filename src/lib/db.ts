@@ -1,31 +1,31 @@
-// src/lib/db.ts
 import mongoose from 'mongoose';
-import Vendor from '@/models/Vendor';
-import Wallet from '@/models/Wallet';
-import Order from '@/models/Order';
 
-// Ensure MongoDB URI is available
+// ✅ Do NOT import models at the top (they register before connection)
 const MONGODB_URI = process.env.MONGODB_URI!;
 if (!MONGODB_URI) throw new Error('Please define MONGODB_URI in .env.local');
 
 declare global {
   // eslint-disable-next-line no-var
-  var mongoose: { conn: mongoose.Mongoose | null; promise: Promise<mongoose.Mongoose> | null };
+  var _mongooseCache: { conn: mongoose.Mongoose | null; promise: Promise<mongoose.Mongoose> | null };
 }
 
-let cached = global.mongoose || { conn: null, promise: null };
+// ✅ Use global cache to persist connection across hot reloads
+let cached = global._mongooseCache || { conn: null, promise: null };
+global._mongooseCache = cached;
 
 /* =================== DATABASE CONNECTION =================== */
-
-/**
- * Connect to MongoDB (cached in development)
- */
 export async function dbConnect(): Promise<mongoose.Mongoose> {
   if (cached.conn) return cached.conn;
 
   if (!cached.promise) {
-    const opts = { bufferCommands: false };
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => mongoose);
+    const opts = {
+      bufferCommands: false,
+      maxPoolSize: 10,
+    };
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+      console.log('✅ MongoDB connected');
+      return mongoose;
+    });
   }
 
   try {
@@ -38,8 +38,15 @@ export async function dbConnect(): Promise<mongoose.Mongoose> {
   return cached.conn;
 }
 
-/* =================== VENDOR HELPERS =================== */
+/* =================== DYNAMIC MODEL IMPORTS =================== */
+async function getModels() {
+  const { default: Vendor } = await import('@/models/Vendor');
+  const { default: Wallet } = await import('@/models/Wallet');
+  const { default: Order } = await import('@/models/Order');
+  return { Vendor, Wallet, Order };
+}
 
+/* =================== VENDOR HELPERS =================== */
 interface VendorFilters {
   verified?: boolean;
   lat?: number;
@@ -49,11 +56,10 @@ interface VendorFilters {
   search?: string;
 }
 
-/**
- * Fetch vendors with optional filters (verification, location, pagination, search)
- */
+/** Fetch vendors with optional filters */
 export async function fetchVendors(filters: VendorFilters = {}) {
   await dbConnect();
+  const { Vendor } = await getModels();
 
   const query: any = {};
 
@@ -61,23 +67,23 @@ export async function fetchVendors(filters: VendorFilters = {}) {
   if (typeof filters.verified === 'boolean') {
     query.verificationStatus = filters.verified ? 'verified' : 'pending';
   } else {
-    query.verificationStatus = 'verified'; // default behavior
+    query.verificationStatus = 'verified'; // default
   }
 
-  // Text search (e.g., vendor name or type)
+  // Search
   if (filters.search) {
     query.$or = [
       { name: { $regex: filters.search, $options: 'i' } },
-      { vendorType: { $regex: filters.search, $options: 'i' } },
+      { category: { $regex: filters.search, $options: 'i' } },
     ];
   }
 
-  // Optional geospatial filter
+  // Location filter
   if (filters.lat && filters.lng) {
     query.location = {
       $near: {
         $geometry: { type: 'Point', coordinates: [filters.lng, filters.lat] },
-        $maxDistance: 10000, // 10 km
+        $maxDistance: 10000, // 10km
       },
     };
   }
@@ -89,68 +95,51 @@ export async function fetchVendors(filters: VendorFilters = {}) {
   return Vendor.find(query)
     .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(limit)
-    .populate('items');
+    .limit(limit);
 }
 
-/**
- * Fetch a vendor by ID
- */
+/** Fetch a vendor by ID */
 export async function fetchVendorById(id: string) {
   await dbConnect();
-  return Vendor.findById(id).populate('items');
+  const { Vendor } = await getModels();
+  return Vendor.findById(id);
 }
 
 /* =================== WALLET HELPERS =================== */
-
-/**
- * Fetch a wallet by user ID
- */
 export async function fetchWalletByUserId(userId: string) {
   await dbConnect();
+  const { Wallet } = await getModels();
   return Wallet.findOne({ userId });
 }
 
-/**
- * Update a wallet balance
- */
 export async function updateWalletBalance(
   userId: string,
   update: { USD?: number; ZWL?: number; pendingHold?: number }
 ) {
   await dbConnect();
+  const { Wallet } = await getModels();
   return Wallet.findOneAndUpdate({ userId }, { $inc: update }, { new: true });
 }
 
 /* =================== ORDER HELPERS =================== */
-
-/**
- * Fetch orders for a user, optionally filtered by status
- */
 export async function fetchOrders(userId: string, status?: string) {
   await dbConnect();
-
+  const { Order } = await getModels();
   const query: any = { userId };
   if (status) query.status = status;
-
-  return Order.find(query).populate('items vendor');
+  return Order.find(query).populate('vendorId');
 }
 
-/**
- * Fetch a single order by ID
- */
 export async function fetchOrderById(orderId: string) {
   await dbConnect();
-  return Order.findById(orderId).populate('items vendor');
+  const { Order } = await getModels();
+  return Order.findById(orderId).populate('vendorId');
 }
 
 /* =================== ADMIN HELPERS =================== */
-
-/**
- * Fetch recent orders for admin dashboard (last 24 hours)
- */
 export async function fetchRecentOrders(limit: number = 10) {
   await dbConnect();
+  const { Order } = await getModels();
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   return Order.find({ createdAt: { $gte: oneDayAgo } })
     .sort({ createdAt: -1 })
