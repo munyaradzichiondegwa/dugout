@@ -8,14 +8,19 @@ interface ProtectedRouteProps {
   role?: string;
 }
 
-// Temporary session type
-type Session = { user: { role: string } } | null;
+interface SessionUser {
+  role: string;
+}
+
+interface Session {
+  user: SessionUser;
+}
 
 export default function ProtectedRoute({ children, role }: ProtectedRouteProps) {
   const router = useRouter();
 
-  // TODO: Replace with real session logic
-  const session: Session = null; // e.g., replace with getSession() later
+  // TODO: Replace with real session logic (e.g. useSession from next-auth)
+  const session = null as Session | null;
 
   if (!session || (role && session.user.role !== role)) {
     router.push('/login');

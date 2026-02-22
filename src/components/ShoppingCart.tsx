@@ -24,6 +24,9 @@ export default function ShoppingCart({ cart, onCheckout }: ShoppingCartProps) {
 
   if (!cart?.items || cart.items.length === 0) return null;
 
+  // Cast currency to the union type formatAmount expects
+  const currency = (cart.currency as 'USD' | 'ZWL') ?? 'USD';
+
   return (
     <div
       className={`fixed bottom-0 left-0 right-0 bg-white p-4 shadow-lg ${
@@ -38,7 +41,7 @@ export default function ShoppingCart({ cart, onCheckout }: ShoppingCartProps) {
           </li>
         ))}
       </ul>
-      <p>Total: {formatAmount(cart.totalAmount, cart.currency)}</p>
+      <p>Total: {formatAmount(cart.totalAmount, currency)}</p>
       <button
         onClick={onCheckout}
         className="bg-primary text-white px-4 py-2 rounded w-full mt-2"

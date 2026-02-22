@@ -18,12 +18,18 @@ export async function PATCH(
   const body = await req.json().catch(() => ({}));
   const action = body.action || 'verify'; // default to 'verify' if not provided
 
+  // Validate action
+  const validActions = ['verify', 'reject', 'suspend'];
+  if (!validActions.includes(action)) {
+    return NextResponse.json({ error: `Invalid action: ${action}` }, { status: 400 });
+  }
+
   const vendor = await Vendor.findById(id);
   if (!vendor) {
     return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
   }
 
-  // 🧩 Handle admin action
+  // Handle admin action
   switch (action) {
     case 'verify':
       vendor.verified = true;
@@ -39,15 +45,14 @@ export async function PATCH(
       vendor.verified = false;
       vendor.verificationStatus = 'suspended';
       break;
-
-    default:
-      return NextResponse.json({ error: `Invalid action: ${action}` }, { status: 400 });
   }
 
   await vendor.save();
 
+  // Generate a proper message
+  const actionCapitalized = action.charAt(0).toUpperCase() + action.slice(1);
   return NextResponse.json({
-    message: `Vendor ${action}ed successfully`,
+    message: `Vendor ${actionCapitalized} successfully`,
     vendor,
   });
 }

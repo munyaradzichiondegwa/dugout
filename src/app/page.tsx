@@ -7,8 +7,13 @@ import WalletBalance from '@/components/WalletBalance';
 import ShoppingCart from '@/components/ShoppingCart';
 import type { Vendor } from '@/types';
 
+// Extend Vendor locally to include price (used in cart calculations)
+interface VendorWithPrice extends Vendor {
+  price?: number;
+}
+
 interface CartItem {
-  menuItemId: Vendor;
+  menuItemId: VendorWithPrice;
   quantity: number;
 }
 
@@ -18,8 +23,11 @@ interface Cart {
   currency: string;
 }
 
+// MapView expects vendors with an 'id' field — adapt here
+type MapVendor = VendorWithPrice & { id: string };
+
 export default function HomePage() {
-  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [vendors, setVendors] = useState<VendorWithPrice[]>([]);
   const [userLocation, setUserLocation] = useState({ lng: 31.0461, lat: -17.8252 });
   const [locationLoading, setLocationLoading] = useState(true);
   const [loadingVendors, setLoadingVendors] = useState(true);
@@ -57,10 +65,10 @@ export default function HomePage() {
       .finally(() => setLoadingVendors(false));
   }, [userLocation, locationLoading]);
 
-  const handleAddToCart = (vendor: Vendor) => {
+  const handleAddToCart = (vendor: VendorWithPrice) => {
     setCart((prev) => {
       const existing = prev.items.find((i) => i.menuItemId._id === vendor._id);
-      let updatedItems;
+      let updatedItems: CartItem[];
       if (existing) {
         updatedItems = prev.items.map((i) =>
           i.menuItemId._id === vendor._id ? { ...i, quantity: i.quantity + 1 } : i
@@ -70,7 +78,7 @@ export default function HomePage() {
       }
 
       const totalAmount = updatedItems.reduce(
-        (sum, i) => sum + (i.menuItemId.price || 0) * i.quantity,
+        (sum, i) => sum + (i.menuItemId.price ?? 0) * i.quantity,
         0
       );
 
@@ -82,6 +90,9 @@ export default function HomePage() {
     console.log('Checkout clicked', cart);
     alert(`Checkout ${cart.items.length} items for ${cart.totalAmount} ${cart.currency}`);
   };
+
+  // Adapt vendors to satisfy MapView's { id: string } requirement
+  const mapVendors: MapVendor[] = vendors.map((v) => ({ ...v, id: v._id }));
 
   if (locationLoading) {
     return (
@@ -99,7 +110,7 @@ export default function HomePage() {
       </header>
 
       <div className="w-full h-96 rounded-lg overflow-hidden shadow-md">
-        <MapView vendors={vendors} userLocation={userLocation} />
+        <MapView vendors={mapVendors} userLocation={userLocation} />
       </div>
 
       {loadingVendors ? (

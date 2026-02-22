@@ -4,17 +4,20 @@ import Order from '@/models/Order';
 import MenuItem from '@/models/MenuItem';
 import { getAuthUser } from '@/lib/auth';
 
-export async function POST(req: NextRequest) {
+// params comes as second argument in Next.js App Router dynamic routes
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   await dbConnect();
   const user = getAuthUser();
-  if (!user || user.role !== 'vendor' && user.role !== 'admin') {
+  if (!user || (user.role !== 'vendor' && user.role !== 'admin')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { params } = req; // In Next.js App Router, use params from dynamic route
-  const orderId = params.id; // Assume [id] is the param
+  const orderId = params.id;
 
-  const order = await Order.findById(orderId).populate('items.menuItemId'); // Wait, items is snapshot, but use original IDs
+  const order = await Order.findById(orderId).populate('items.menuItemId');
   if (!order || order.status !== 'accepted') {
     return NextResponse.json({ error: 'Invalid order' }, { status: 400 });
   }

@@ -4,12 +4,18 @@ import { useParams } from 'next/navigation';
 import ProductCard from '@/components/ProductCard';
 import ShoppingCart from '@/components/ShoppingCart';
 
+interface Cart {
+  items: any[];
+  totalAmount: number;
+  currency: string; // required by ShoppingCart
+}
+
 export default function VendorPage() {
   const params = useParams();
   const vendorId = params.id;
 
   const [items, setItems] = useState<any[]>([]);
-  const [cart, setCart] = useState<{ items: any[]; totalAmount: number }>({ items: [], totalAmount: 0 });
+  const [cart, setCart] = useState<Cart>({ items: [], totalAmount: 0, currency: 'USD' });
 
   // Fetch menu items and cart on load
   useEffect(() => {
@@ -19,7 +25,7 @@ export default function VendorPage() {
 
     fetch(`/api/carts?vendorId=${vendorId}`)
       .then(res => res.json())
-      .then(setCart);
+      .then((data) => setCart({ currency: 'USD', ...data })); // ensure currency always present
   }, [vendorId]);
 
   // Add item to cart
@@ -29,9 +35,8 @@ export default function VendorPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ vendorId, items: [{ menuItemId: itemId, quantity }], currency: 'USD' }),
     });
-    // Refresh cart
     const newCart = await fetch(`/api/carts?vendorId=${vendorId}`).then(res => res.json());
-    setCart(newCart);
+    setCart({ currency: 'USD', ...newCart });
   };
 
   // Checkout flow
@@ -56,11 +61,10 @@ export default function VendorPage() {
       const order = await orderRes.json();
       if (!orderRes.ok) throw new Error(order.error);
 
-      // Step 3: Mock notify vendor
       console.log(`Order ${order._id} created. Notifying vendor: ${vendorId} via mock SMS/Email: "New order incoming!"`);
 
       alert('Order placed successfully!');
-      setCart({ items: [], totalAmount: 0 }); // Clear cart
+      setCart({ items: [], totalAmount: 0, currency: 'USD' });
     } catch (error) {
       console.error('Checkout failed:', error);
       alert('Checkout failed: ' + (error as Error).message);

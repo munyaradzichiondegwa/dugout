@@ -1,42 +1,68 @@
 // src/lib/auth.ts
+
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
-import { NextAuthOptions } from "next-auth";
 
-// Ensure you have a JWT secret
+// Ensure you have a JWT secret set in your environment variables
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error("NEXTAUTH_SECRET or JWT_SECRET is not defined in .env");
+if (!JWT_SECRET || typeof JWT_SECRET !== "string") {
+  throw new Error("JWT secret is not defined in environment variables");
+}
+
+// Cast once after the runtime guard — TypeScript now knows it's a string
+const SECRET: string = JWT_SECRET;
 
 // --- Types ---
 export interface AuthPayload {
   userId: string;
   role: "customer" | "vendor" | "admin";
   phone?: string;
+  vendorId?: string;
 }
 
-// --- JWT Utilities ---
+// --- JWT Utility Functions ---
 export function generateToken(payload: AuthPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign(payload, SECRET, { expiresIn: "7d" });
 }
 
 export function verifyToken(token: string): AuthPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as AuthPayload;
+    return jwt.verify(token, SECRET) as unknown as AuthPayload;
   } catch {
     return null;
   }
 }
 
-// --- Cookie-based Auth Helper ---
-export function getAuthUser(): AuthPayload | null {
-  const cookieStore = cookies();
-  const token = cookieStore.get("auth-token")?.value;
+/**
+ * Get authenticated user info.
+ * If 'req' is provided, parse cookies from request headers.
+ * Otherwise, use cookies() helper for server components.
+ */
+export function getAuthUser(req?: Request): AuthPayload | null {
+  let token: string | undefined;
+
+  if (req) {
+    const cookieHeader = req.headers.get("cookie");
+    if (!cookieHeader) return null;
+
+    const cookiesMap = Object.fromEntries(
+      cookieHeader.split("; ").map(c => {
+        const [key, val] = c.split("=");
+        return [key, val];
+      })
+    );
+    token = cookiesMap["auth-token"];
+  } else {
+    const cookieStore = cookies();
+    token = cookieStore.get("auth-token")?.value;
+  }
+
   if (!token) return null;
   return verifyToken(token);
 }
 
-// --- Password Utilities ---
+// --- Password hashing and verification ---
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
 }
@@ -44,22 +70,3 @@ export async function hashPassword(password: string): Promise<string> {
 export async function verifyPassword(password: string, hashed: string): Promise<boolean> {
   return bcrypt.compare(password, hashed);
 }
-
-// --- NextAuth Options ---
-export const authOptions: NextAuthOptions = {
-  secret: JWT_SECRET,
-  session: { strategy: "jwt" },
-  providers: [
-    // Add your authentication providers here, e.g. Google, Credentials, etc.
-  ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user && "role" in user) token.role = (user as any).role;
-      return token;
-    },
-    async session({ session, token }) {
-      if (session?.user) session.user.role = (token as any).role;
-      return session;
-    },
-  },
-};

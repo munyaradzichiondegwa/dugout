@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import dbConnect from '@/lib/dbConnect';
+import { dbConnect } from '@/lib/db';
 import VendorModel, { IVendor } from '@/models/Vendor';
 
 export async function GET(req: NextRequest) {

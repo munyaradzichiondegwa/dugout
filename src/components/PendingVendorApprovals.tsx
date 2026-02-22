@@ -12,11 +12,11 @@ interface Vendor {
 
 interface Props {
   vendors: Vendor[];
-  onUpdate?: (vendorId: string) => void; // Callback to update parent pending count
+  onUpdate?: (vendorId: string) => void;
 }
 
 export default function PendingVendorApprovals({ vendors, onUpdate }: Props) {
-  const [vendorList, setVendorList] = useState(vendors);
+  const [vendorList, setVendorList] = useState<Vendor[]>(vendors);
 
   const handleAction = async (vendorId: string, action: 'verify' | 'reject' | 'suspend') => {
     try {
@@ -29,14 +29,19 @@ export default function PendingVendorApprovals({ vendors, onUpdate }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update vendor');
 
-      // Update vendor in local state
+      // Map action to the correct verificationStatus value
+      const statusMap: Record<'verify' | 'reject' | 'suspend', Vendor['verificationStatus']> = {
+        verify: 'verified',
+        reject: 'rejected',   // ← was 'reject', must be 'rejected'
+        suspend: 'suspended', // ← was 'suspend', must be 'suspended'
+      };
+
       setVendorList((prev) =>
         prev.map((v) =>
-          v._id === vendorId ? { ...v, verificationStatus: action === 'verify' ? 'verified' : action } : v
+          v._id === vendorId ? { ...v, verificationStatus: statusMap[action] } : v
         )
       );
 
-      // Notify parent to update pending count
       if (onUpdate && action === 'verify') onUpdate(vendorId);
     } catch (error) {
       console.error('Action failed:', error);

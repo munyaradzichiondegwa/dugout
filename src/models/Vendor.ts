@@ -12,7 +12,7 @@ export interface IVendor extends Document {
   category?: string;
   image?: string;
   verified?: boolean;
-  verificationStatus?: 'pending' | 'verified' | 'rejected'; // added for admin use
+  verificationStatus?: 'pending' | 'verified' | 'rejected' | 'suspended'; // updated enum
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,7 +39,7 @@ const VendorSchema: Schema<IVendor> = new Schema(
     verified: { type: Boolean, default: false },
     verificationStatus: {
       type: String,
-      enum: ['pending', 'verified', 'rejected'],
+      enum: ['pending', 'verified', 'rejected', 'suspended'], // added 'suspended'
       default: 'pending',
     },
   },
@@ -49,9 +49,9 @@ const VendorSchema: Schema<IVendor> = new Schema(
 // Add 2dsphere index for location queries
 VendorSchema.index({ location: '2dsphere' });
 
-// ✅ Ensure mongoose.models is always defined before access
+// Ensure mongoose.models is always defined before access
 const VendorModel: Model<IVendor> =
-  (mongoose.models && mongoose.models.Vendor as Model<IVendor>) ||
+  (mongoose.models && mongoose.models.Vendor) ||
   mongoose.model<IVendor>('Vendor', VendorSchema);
 
 export default VendorModel;

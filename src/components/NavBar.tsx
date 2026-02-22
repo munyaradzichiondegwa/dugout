@@ -1,11 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { useCart } from '@/lib/cartContext';
-import { useUser } from '@/context/UserContext'; // Example auth context (replace if needed)
+import { useUser } from '@/context/UserContext';
 
 export default function NavBar() {
-  const { cartItemCount } = useCart(); // from Context (0 if empty)
-  const { user } = useUser() || {};    // assume { role: 'admin' | 'vendor' | 'customer' }
+  const { state } = useCart();
+  const cartItemCount = state.items?.reduce((sum: number, i: any) => sum + i.quantity, 0) ?? 0;
+  const { user } = useUser() || {};
 
   return (
     <nav className="bg-blue-600 text-white shadow-lg">
